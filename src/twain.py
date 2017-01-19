@@ -2219,6 +2219,9 @@ class SourceManager(object):
             elif hasattr(parent_window, 'window') and hasattr(parent_window.window, 'handle'):
                 # gtk window
                 self._hwnd = parent_window.window.handle
+            elif hasattr(parent_window, 'winId'):
+                # pyqt window
+                self._hwnd = int(parent_window.winId())
             elif parent_window is None:
                 self._hwnd = 0
             else:
