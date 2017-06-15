@@ -1511,6 +1511,73 @@ else:
         return ctypes.libc.free(handle)
 
 
+class CapabilityContainer(object):
+    def __init__(self, values):
+        self._values = values
+
+class OneValueCapabilityContainer(CapabilityContainer):
+    def get_current(self):
+        return self._values[1]
+
+    def get_default(self):
+        return None
+
+    def get_available(self):
+        return None
+
+    def get_value_type(self):
+        return self._values[0]
+
+class RangeCapabilityContainer(CapabilityContainer):
+    def get_current(self):
+        return self._values['CurrentValue']
+
+    def get_default(self):
+        return self._values['DefaultValue']
+
+    def get_available(self):
+        return None
+
+    def get_value_type(self):
+        return None
+
+class EnumerationCapabilityContainer(CapabilityContainer):
+    def get_current(self):
+        return self._values[1][0]
+
+    def get_default(self):
+        return self._values[1][1]
+
+    def get_available(self):
+        return self._values[1][2]
+
+    def get_value_type(self):
+        return self._values[0]
+
+class ArrayCapabilityContainer(CapabilityContainer):
+    def get_current(self):
+        return None
+
+    def get_default(self):
+        return None
+
+    def get_available(self):
+        return self._values[1]
+
+    def get_value_type(self):
+        return self._values[0]
+
+def CapabilityContainerFactory(conttype, values):
+    if conttype == TWON_ONEVALUE:
+        return OneValueCapabilityContainer(values)
+    if conttype == TWON_ENUMERATION:
+        return EnumerationCapabilityContainer(values)
+    if conttype == TWON_RANGE:
+        return RangeCapabilityContainer(values)
+    if conttype == TWON_ARRAY:
+        return ArrayCapabilityContainer(values)
+    return None
+
 class Source(object):
     """
     This object represents connection to Data Source.
@@ -1587,14 +1654,14 @@ class Source(object):
                         val = _fix2float(val)
                     elif type_id == TWTY_FRAME:
                         val = _frame2tuple(val)
-                    return type_id, val
+                    return CapabilityContainerFactory(TWON_ONEVALUE, (type_id, val))
                 elif twCapability.ConType == TWON_RANGE:
                     rng = cast(ptr, POINTER(TW_RANGE)).contents
-                    return {'MinValue': rng.MinValue,
+                    return CapabilityContainerFactory(TWON_RANGE, {'MinValue': rng.MinValue,
                             'MaxValue': rng.MaxValue,
                             'StepSize': rng.StepSize,
                             'DefaultValue': rng.DefaultValue,
-                            'CurrentValue': rng.CurrentValue}
+                            'CurrentValue': rng.CurrentValue})
                 elif twCapability.ConType == TWON_ENUMERATION:
                     enum = cast(ptr, POINTER(TW_ENUMERATION)).contents
                     if not _is_good_type(enum.ItemType):
@@ -1605,7 +1672,7 @@ class Source(object):
                     ctype = _mapping[enum.ItemType]
                     item_p = cast(ptr + sizeof(TW_ENUMERATION), POINTER(ctype))
                     values = [el for el in item_p[0:enum.NumItems]]
-                    return enum.ItemType, (enum.CurrentIndex, enum.DefaultIndex, values)
+                    return CapabilityContainerFactory(TWON_ENUMERATION, (enum.ItemType, (enum.CurrentIndex, enum.DefaultIndex, values)))
                 elif twCapability.ConType == TWON_ARRAY:
                     arr = cast(ptr, POINTER(TW_ARRAY)).contents
                     if not _is_good_type(arr.ItemType):
@@ -1615,7 +1682,7 @@ class Source(object):
                         raise excCapabilityFormatNotSupported(msg)
                     ctype = _mapping[arr.ItemType]
                     item_p = cast(ptr + sizeof(TW_ARRAY), POINTER(ctype))
-                    return arr.ItemType, [el for el in item_p[0:arr.NumItems]]
+                    return CapabilityContainerFactory(TWON_ARRAY, (arr.ItemType, [el for el in item_p[0:arr.NumItems]]))
                 else:
                     msg = "Capability Code = %d, Format Code = %d" % (cap, twCapability.ConType)
                     raise excCapabilityFormatNotSupported(msg)
